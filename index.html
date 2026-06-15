@@ -92,10 +92,10 @@
   /* ===== אלבום פולארויד חי ===== */
   .album-title{text-align:center;margin:46px 0 4px;font-family:'Fredoka';font-size:clamp(24px,6vw,34px);color:var(--indigo);}
   .album-hint{text-align:center;color:var(--indigo-deep);opacity:.75;font-size:15px;margin-bottom:6px;}
-  .album{position:relative;height:430px;margin:0 auto;max-width:920px;touch-action:none;}
+  .album{position:relative;height:430px;margin:0 auto;max-width:920px;touch-action:pan-y;}
   .polaroid{
     position:absolute;background:#fff;padding:10px 10px 34px;border-radius:6px;
-    box-shadow:0 12px 26px rgba(12,79,89,.25);cursor:grab;user-select:none;
+    box-shadow:0 12px 26px rgba(12,79,89,.25);cursor:grab;user-select:none;touch-action:pan-y;
     transition:box-shadow .2s, transform .08s;width:170px;
   }
   .polaroid img{width:100%;height:150px;object-fit:cover;border-radius:3px;display:block;pointer-events:none;background:var(--mint-soft);}
@@ -219,11 +219,6 @@
       <p class="sub">נולדו לנו תאומים מתוקים — בן ובת 💙🩷<br>ועדיין אין להם שם אמיתי... אבל <b>אתם</b> הולכים לנחש!</p>
     </section>
 
-    <!-- אלבום חי -->
-    <h2 class="album-title">📸 רגעים ראשונים</h2>
-    <p class="album-hint">↔️ גררו את התמונות עם האצבע / העכבר</p>
-    <div class="album" id="album"></div>
-
     <!-- איך זה עובד -->
     <section class="how">
       <h2>🎯 איך ההימור עובד?</h2>
@@ -238,6 +233,11 @@
         כלום! 😄 אין פרס אמיתי — רק זכות הראשונים, כבוד נצחי, וזכרון מתוק שניחשתם נכון. זה כולו בכיף!
       </div>
     </section>
+
+    <!-- אלבום חי -->
+    <h2 class="album-title">📸 רגעים ראשונים</h2>
+    <p class="album-hint">↔️ גררו תמונה הצידה · להחלקה למעלה/למטה גוללים רגיל</p>
+    <div class="album" id="album"></div>
 
     <!-- פרשנים -->
     <section class="pundits">
@@ -379,26 +379,28 @@
     let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(layout,250);});
 
     function makeDraggable(card){
-      let sx,sy,ox,oy,drag=false;
-      const down=(e)=>{
-        drag=true;card.classList.add('dragging');card.style.zIndex=++z;
-        const p=point(e);sx=p.x;sy=p.y;
-        ox=parseFloat(card.style.left);oy=parseFloat(card.style.top);
-        e.preventDefault();
-      };
-      const move=(e)=>{
-        if(!drag)return;
-        const p=point(e);
-        card.style.left=(ox+p.x-sx)+'px';
-        card.style.top=(oy+p.y-sy)+'px';
-      };
-      const up=()=>{if(drag){drag=false;card.classList.remove('dragging');}};
-      card.addEventListener('mousedown',down);
-      window.addEventListener('mousemove',move);
-      window.addEventListener('mouseup',up);
-      card.addEventListener('touchstart',down,{passive:false});
-      window.addEventListener('touchmove',move,{passive:false});
-      window.addEventListener('touchend',up);
+      let sx,sy,ox,oy,drag=false,pending=false;
+      function begin(){card.classList.add('dragging');card.style.zIndex=++z;}
+      function moveTo(p){card.style.left=(ox+p.x-sx)+'px';card.style.top=(oy+p.y-sy)+'px';}
+      function startVals(p){ox=parseFloat(card.style.left);oy=parseFloat(card.style.top);sx=p.x;sy=p.y;}
+
+      // עכבר — גרירה רגילה
+      card.addEventListener('mousedown',(e)=>{startVals(point(e));drag=true;begin();e.preventDefault();});
+      window.addEventListener('mousemove',(e)=>{if(drag)moveTo(point(e));});
+      window.addEventListener('mouseup',()=>{if(drag){drag=false;card.classList.remove('dragging');}});
+
+      // מגע — מבדיל בין גרירה אופקית (מזיז) לבין החלקה אנכית (גלילת דף)
+      card.addEventListener('touchstart',(e)=>{startVals(point(e));pending=true;drag=false;},{passive:true});
+      card.addEventListener('touchmove',(e)=>{
+        const p=point(e),dx=p.x-sx,dy=p.y-sy;
+        if(pending){
+          if(Math.abs(dx)>8 && Math.abs(dx)>Math.abs(dy)){pending=false;drag=true;begin();}
+          else if(Math.abs(dy)>8){pending=false;return;}   // גלילה — נותנים לדפדפן
+          else return;
+        }
+        if(drag){e.preventDefault();moveTo(p);}
+      },{passive:false});
+      card.addEventListener('touchend',()=>{pending=false;if(drag){drag=false;card.classList.remove('dragging');}});
     }
     function point(e){
       if(e.touches&&e.touches[0])return{x:e.touches[0].clientX,y:e.touches[0].clientY};
